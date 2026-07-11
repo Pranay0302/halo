@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PageRep, Preset, RestyleRuleSet, Template } from '../../shared/types';
 import { PRESETS, getPreset } from '../../rules/presets';
 import { listTemplates, saveTemplate, deleteTemplate as delTemplate } from '../../storage/templates';
-import { getActiveDomain, sendToTab, sendToRuntime } from './messaging';
+import { getStoredClient } from '../../agent/stored';
+import { getActiveDomain, sendToTab } from './messaging';
 
 export type Status = { kind: 'idle' | 'busy' | 'error' | 'info'; message?: string };
 const EMPTY: RestyleRuleSet = { version: 1, ops: [], globalCss: '' };
@@ -65,14 +66,13 @@ export function useAppState() {
   }, [applyRuleSet]);
 
   const generate = useCallback(async (instruction: string) => {
-    setStatus({ kind: 'busy', message: 'Asking the agent…' });
+    setStatus({ kind: 'busy', message: 'Reading the page…' });
     try {
+      const client = await getStoredClient();
       const { pageRep } = await sendToTab<{ pageRep: PageRep }>({ type: 'EXTRACT_PAGE' });
-      const res = await sendToRuntime<{ ruleSet: RestyleRuleSet } | { error: string }>(
-        { type: 'GENERATE', instruction, base: current.current, pageRep },
-      );
-      if ('error' in res) { setStatus({ kind: 'error', message: res.error }); return; }
-      await applyRuleSet(res.ruleSet);
+      setStatus({ kind: 'busy', message: 'Asking the agent…' });
+      const ruleSet = await client.generate({ pageRep, base: current.current, instruction });
+      await applyRuleSet(ruleSet);
     } catch (e) {
       setStatus({ kind: 'error', message: (e as Error).message });
     }

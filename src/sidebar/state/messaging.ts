@@ -49,7 +49,3 @@ export async function sendToTab<T>(msg: Message): Promise<T> {
   await ensureContentScript(tab.id!);
   return chrome.tabs.sendMessage(tab.id!, msg) as Promise<T>;
 }
-
-export async function sendToRuntime<T>(msg: Message): Promise<T> {
-  return chrome.runtime.sendMessage(msg) as Promise<T>;
-}

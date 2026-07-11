@@ -23,9 +23,6 @@ export async function handleMessage(msg: Message): Promise<Responses[keyof Respo
     case 'RESET':
       resetCurrent();
       return { ok: true };
-    case 'GENERATE':
-      // Agent calls run in the background worker, not the content script.
-      return { error: 'GENERATE not handled in content script' };
   }
 }
 
