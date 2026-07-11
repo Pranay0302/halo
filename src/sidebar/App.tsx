@@ -1,3 +1,8 @@
 export function App() {
-  return <main style={{ padding: 12, fontFamily: 'system-ui' }}><h1>Layout Overlay</h1></main>;
+  return (
+    <main className="app">
+      <h1 className="app__title">Layout Overlay</h1>
+      <p className="app__subtitle">Reshape any page with reusable templates.</p>
+    </main>
+  );
 }

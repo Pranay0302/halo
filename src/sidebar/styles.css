@@ -1,0 +1,55 @@
+:root {
+  /* Warm, editorial palette */
+  --bg: #faf9f6;
+  --surface: #ffffff;
+  --text: #1a1a18;
+  --muted: #6b6a63;
+  --border: #e8e6df;
+  --accent: #c15f3c;
+
+  /* Serif for display, grotesque sans for UI — Anthropic-esque essence,
+     with graceful system fallbacks so no fonts are bundled. */
+  --font-serif: 'Tiempos Text', 'Copernicus', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Styrene A', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.app {
+  min-height: 100%;
+  padding: 28px 24px;
+}
+
+.app__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+}
+
+.app__subtitle {
+  margin: 8px 0 0;
+  max-width: 30ch;
+  color: var(--muted);
+  font-size: 14px;
+}
