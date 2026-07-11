@@ -7,10 +7,16 @@ export interface AgentInput {
   instruction: string;
 }
 
+export interface AgentProgress {
+  phase: 'thinking' | 'answering';
+  text: string;
+  chars: number;
+}
+
 export interface AgentClient {
   generate(
     input: AgentInput,
-    onProgress?: (partial: string) => void,
+    onProgress?: (progress: AgentProgress) => void,
     signal?: AbortSignal,
   ): Promise<RestyleRuleSet>;
 }
@@ -27,8 +33,8 @@ export function buildPrompt(input: AgentInput): string {
       'roles, aria-labels, ids, and semantic tags — over auto-generated class names.',
     'Return ONLY the JSON object, no prose, no markdown.',
     `Page URL: ${input.pageRep.url}`,
-    `Current rule set: ${JSON.stringify(input.base)}`,
-    `Page structure (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 16000)}`,
+    `Current rule set: ${JSON.stringify(input.base).slice(0, 2000)}`,
+    `Page structure (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 6000)}`,
     `User instruction: ${input.instruction}`,
   ].join('\n');
 }

@@ -10,17 +10,15 @@ function nodeOf(el: Element, depth: number, maxDepth: number, budget: { n: numbe
   const role = el.getAttribute('role');
   if (role) node.role = role;
 
+  const label = el.getAttribute('aria-label');
+  if (label) node.label = label.slice(0, 60);
+
   const ownText = Array.from(el.childNodes)
     .filter((n) => n.nodeType === Node.TEXT_NODE)
     .map((n) => n.textContent || '')
     .join(' ')
     .trim();
   if (ownText) node.text = ownText.slice(0, 80);
-
-  const rect = (el as HTMLElement).getBoundingClientRect?.();
-  if (rect && (rect.width || rect.height)) {
-    node.rect = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) };
-  }
 
   if (depth < maxDepth) {
     const kids: PageRepNode[] = [];
@@ -40,7 +38,7 @@ export function extractPageRep(
   opts: { maxDepth?: number; maxNodes?: number; url?: string } = {},
 ): PageRep {
   const maxDepth = opts.maxDepth ?? 12;
-  const budget = { n: opts.maxNodes ?? 1500 };
+  const budget = { n: opts.maxNodes ?? 800 };
   const el = (root as Document).body ?? (root as HTMLElement);
   return {
     url: opts.url ?? (typeof location !== 'undefined' ? location.href : ''),

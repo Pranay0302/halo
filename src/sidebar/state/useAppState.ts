@@ -106,10 +106,11 @@ export function useAppState() {
       try {
         const ruleSet = await client.generate(
           { pageRep, base: current.current, instruction },
-          (partial) => {
+          (progress) => {
             streaming = true;
-            setAgentOutput(partial);
-            setStatus({ kind: 'busy', message: `Agent responding… (${partial.length} chars)` });
+            setAgentOutput(progress.text);
+            const label = progress.phase === 'thinking' ? 'Thinking' : 'Writing changes';
+            setStatus({ kind: 'busy', message: `${label}… (${progress.chars} chars)` });
           },
           controller.signal,
         );

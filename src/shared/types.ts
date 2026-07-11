@@ -28,8 +28,8 @@ export interface PageRepNode {
   id?: string;
   classes?: string[];
   role?: string;
+  label?: string;
   text?: string;
-  rect?: { x: number; y: number; w: number; h: number };
   children?: PageRepNode[];
 }
 
