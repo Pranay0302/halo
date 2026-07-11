@@ -4,6 +4,8 @@ import { KeySettings } from './components/KeySettings';
 import { PresetGallery } from './components/PresetGallery';
 import { PromptBox } from './components/PromptBox';
 import { TemplateList } from './components/TemplateList';
+import { DataControls } from './components/DataControls';
+import { ActivityLog } from './components/ActivityLog';
 import { StatusBar } from './components/StatusBar';
 
 export function App() {
@@ -33,9 +35,12 @@ export function App() {
       <section className="section">
         <h2 className="section__title">Saved for this site</h2>
         <TemplateList templates={s.templates} onApply={s.applyTemplate} onDelete={s.deleteTemplate} />
+        <DataControls onExport={s.exportAll} onImport={s.importAll} />
       </section>
 
       <StatusBar status={s.status} />
+
+      <ActivityLog steps={s.activity} output={s.agentOutput} />
     </main>
   );
 }

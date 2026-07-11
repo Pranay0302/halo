@@ -5,6 +5,8 @@ import { type AgentClient, type AgentInput, buildPrompt, parseAgentResponse } fr
 // Docs: https://hub.hcompany.ai/quickstart
 const DEFAULT_ENDPOINT = 'https://api.hcompany.ai/v1/chat/completions';
 const DEFAULT_MODEL = 'holo3-1-35b-a3b';
+// Abort if no data arrives for this long. Streaming resets it on every chunk,
+// so a slow-but-steady model keeps going instead of hitting a hard wall.
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 const SYSTEM_PROMPT =
@@ -36,9 +38,14 @@ export class HCompanyClient implements AgentClient {
     this.fetchImpl = opts.fetchImpl ?? fetch.bind(globalThis);
   }
 
-  async generate(input: AgentInput): Promise<RestyleRuleSet> {
+  async generate(input: AgentInput, onProgress?: (partial: string) => void): Promise<RestyleRuleSet> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timer!: ReturnType<typeof setTimeout>;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    };
+    arm();
 
     let res: Response;
     try {
@@ -52,6 +59,7 @@ export class HCompanyClient implements AgentClient {
           model: this.model,
           temperature: 0,
           max_tokens: 2048,
+          stream: true,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: buildPrompt(input) },
@@ -60,25 +68,79 @@ export class HCompanyClient implements AgentClient {
         signal: controller.signal,
       });
     } catch (e) {
+      clearTimeout(timer);
       if (controller.signal.aborted) {
-        throw new Error(`H Company API timed out after ${this.timeoutMs / 1000}s. Try again.`);
+        throw new Error(`H Company API timed out after ${this.timeoutMs / 1000}s with no response. Try again.`);
       }
       throw new Error(`Could not reach the H Company API: ${(e as Error).message}`);
+    }
+
+    if (!res.ok) {
+      clearTimeout(timer);
+      throw new Error(`H Company API error ${res.status}: ${await res.text().catch(() => '')}`.trim());
+    }
+
+    let content = '';
+    let raw = '';
+    const reader = res.body?.getReader();
+    try {
+      if (reader) {
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          arm();
+          const chunk = decoder.decode(value, { stream: true });
+          raw += chunk;
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t.startsWith('data:')) continue;
+            const payload = t.slice(5).trim();
+            if (payload === '[DONE]') continue;
+            try {
+              const json = JSON.parse(payload);
+              const delta: unknown = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.message?.content;
+              if (typeof delta === 'string' && delta) {
+                content += delta;
+                onProgress?.(content);
+              }
+            } catch {
+              // Partial SSE line spanning chunks — recovered on the next read.
+            }
+          }
+        }
+      } else {
+        raw = await res.text();
+      }
+    } catch (e) {
+      if (controller.signal.aborted) {
+        throw new Error(`H Company API stalled (no data for ${this.timeoutMs / 1000}s). Try again.`);
+      }
+      throw e;
     } finally {
       clearTimeout(timer);
     }
 
-    if (!res.ok) {
-      throw new Error(`H Company API error ${res.status}: ${await res.text().catch(() => '')}`.trim());
+    // Non-streamed fallback: the server returned a single JSON body.
+    if (!content && raw) {
+      try {
+        const json = JSON.parse(raw) as {
+          choices?: Array<{ message?: { content?: string } }>;
+          output?: string;
+          text?: string;
+        };
+        const c = json.choices?.[0]?.message?.content ?? json.output ?? json.text;
+        if (typeof c === 'string') { content = c; onProgress?.(content); }
+      } catch {
+        // Not JSON either — fall through to the "no output" error below.
+      }
     }
 
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-      output?: string;
-      text?: string;
-    };
-    const text = data.choices?.[0]?.message?.content ?? data.output ?? data.text;
-    if (typeof text !== 'string') throw new Error('H Company API returned no text output');
-    return parseAgentResponse(text);
+    if (!content) throw new Error('H Company API returned no text output');
+    return parseAgentResponse(content);
   }
 }

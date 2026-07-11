@@ -8,7 +8,7 @@ export interface AgentInput {
 }
 
 export interface AgentClient {
-  generate(input: AgentInput): Promise<RestyleRuleSet>;
+  generate(input: AgentInput, onProgress?: (partial: string) => void): Promise<RestyleRuleSet>;
 }
 
 export function buildPrompt(input: AgentInput): string {
@@ -18,10 +18,13 @@ export function buildPrompt(input: AgentInput): string {
     'Op is one of: {op:"hide",selector}, {op:"restyle",selector,css:{}},',
     '{op:"move",selector,target,position:"before|after|prepend|append"},',
     '{op:"reorder",selector,order:[]}, {op:"setText",selector,text}, {op:"wrap",selector,wrapper,className?}.',
-    'Return ONLY the JSON object, no prose.',
+    'globalCss is a scoped CSS string; use it for structural rules like ' +
+      '"tr:nth-child(n+6){display:none}". Prefer stable selectors — element ' +
+      'roles, aria-labels, ids, and semantic tags — over auto-generated class names.',
+    'Return ONLY the JSON object, no prose, no markdown.',
     `Page URL: ${input.pageRep.url}`,
     `Current rule set: ${JSON.stringify(input.base)}`,
-    `Page structure (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 6000)}`,
+    `Page structure (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 16000)}`,
     `User instruction: ${input.instruction}`,
   ].join('\n');
 }
