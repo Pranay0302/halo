@@ -79,7 +79,10 @@ export class HCompanyClient implements AgentClient {
       } catch (e) {
         if (externalSignal?.aborted) throw new DOMException('Request cancelled', 'AbortError');
         if (controller.signal.aborted) {
-          throw new Error(`H Company API timed out after ${this.timeoutMs / 1000}s with no response. Try again.`);
+          throw new Error(
+            `H Company API timed out after ${this.timeoutMs / 1000}s with no response. ` +
+            'The free tier allows ~5 requests/min — wait a few seconds and try again.',
+          );
         }
         throw new Error(`Could not reach the H Company API: ${(e as Error).message}`);
       }
@@ -130,6 +133,12 @@ export class HCompanyClient implements AgentClient {
           throw new Error(`H Company API stalled (no data for ${this.timeoutMs / 1000}s). Try again.`);
         }
         throw e;
+      } finally {
+        // Release the connection promptly so the next request isn't blocked
+        // waiting for this one's socket.
+        if (reader) {
+          try { await reader.cancel(); } catch { /* stream already closed */ }
+        }
       }
 
       // Non-streamed fallback: the server returned a single JSON body.

@@ -92,19 +92,34 @@ export function useAppState() {
       const { pageRep } = await sendToTab<{ pageRep: PageRep }>({ type: 'EXTRACT_PAGE' });
       log(`Captured ${countNodes(pageRep.root)} elements. Sending to the agent…`);
 
-      setStatus({ kind: 'busy', message: 'Asking the agent…' });
-      const ruleSet = await client.generate(
-        { pageRep, base: current.current, instruction },
-        (partial) => {
-          setAgentOutput(partial);
-          setStatus({ kind: 'busy', message: `Agent responding… (${partial.length} chars)` });
-        },
-        controller.signal,
-      );
+      // Tick a live elapsed counter while waiting for the first token, so a slow
+      // response is visibly progressing instead of looking frozen.
+      const started = Date.now();
+      let streaming = false;
+      const ticker = setInterval(() => {
+        if (!streaming) {
+          const secs = Math.round((Date.now() - started) / 1000);
+          setStatus({ kind: 'busy', message: `Asking the agent… (${secs}s)` });
+        }
+      }, 1000);
 
-      log(`Agent returned ${ruleSet.ops.length} op(s)${ruleSet.globalCss.trim() ? ' + CSS' : ''}. Applying…`);
-      await applyRuleSet(ruleSet);
-      log('Applied.');
+      try {
+        const ruleSet = await client.generate(
+          { pageRep, base: current.current, instruction },
+          (partial) => {
+            streaming = true;
+            setAgentOutput(partial);
+            setStatus({ kind: 'busy', message: `Agent responding… (${partial.length} chars)` });
+          },
+          controller.signal,
+        );
+
+        log(`Agent returned ${ruleSet.ops.length} op(s)${ruleSet.globalCss.trim() ? ' + CSS' : ''}. Applying…`);
+        await applyRuleSet(ruleSet);
+        log('Applied.');
+      } finally {
+        clearInterval(ticker);
+      }
     } catch (e) {
       // A newer request superseded this one — leave its status alone.
       if ((e as Error).name === 'AbortError') return;
