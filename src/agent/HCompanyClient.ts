@@ -5,20 +5,37 @@ import { type AgentClient, type AgentInput, type AgentProgress, buildPrompt, par
 // Docs: https://hub.hcompany.ai/quickstart
 const DEFAULT_ENDPOINT = 'https://api.hcompany.ai/v1/chat/completions';
 const DEFAULT_MODEL = 'holo3-1-35b-a3b';
-// holo3 is a reasoning model: it streams a long `reasoning` chain before the
-// final `content`. Give it enough room to finish reasoning AND emit the answer.
-const DEFAULT_MAX_TOKENS = 5000;
+// holo3 is a reasoning model. Its default (full) reasoning is very slow — often
+// tens of seconds. "low" effort keeps it fast (~1-3s) while still emitting the
+// JSON answer, so the page updates quickly.
+const DEFAULT_REASONING_EFFORT = 'low';
+const DEFAULT_MAX_TOKENS = 2000;
 // Abort if no data arrives for this long. Streaming resets it on every chunk,
 // so a slow-but-steady model keeps going instead of hitting a hard wall.
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 const SYSTEM_PROMPT =
-  'You output only a JSON RestyleRuleSet describing how to restyle a web page. ' +
-  'Think briefly, then respond with a single JSON object and no prose or markdown.';
+  'You restyle web pages with CSS. Respond with ONLY a JSON object of the form ' +
+  '{"css":"<css rules>"} — a single JSON object, no prose, no markdown.';
 
 interface Delta {
   content?: string | null;
   reasoning?: string | null;
+}
+
+type UserContent =
+  | string
+  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
+
+// Multimodal when a screenshot is present: send the prompt text plus the image
+// so the model can see the page; otherwise send plain text.
+function buildUserContent(input: AgentInput): UserContent {
+  const text = buildPrompt(input);
+  if (!input.screenshot) return text;
+  return [
+    { type: 'text', text },
+    { type: 'image_url', image_url: { url: input.screenshot } },
+  ];
 }
 
 export interface HCompanyOptions {
@@ -26,6 +43,7 @@ export interface HCompanyOptions {
   endpoint?: string;
   model?: string;
   maxTokens?: number;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }
@@ -35,6 +53,7 @@ export class HCompanyClient implements AgentClient {
   private readonly endpoint: string;
   private readonly model: string;
   private readonly maxTokens: number;
+  private readonly reasoningEffort: 'low' | 'medium' | 'high';
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
@@ -43,6 +62,7 @@ export class HCompanyClient implements AgentClient {
     this.endpoint = opts.endpoint ?? DEFAULT_ENDPOINT;
     this.model = opts.model ?? DEFAULT_MODEL;
     this.maxTokens = opts.maxTokens ?? DEFAULT_MAX_TOKENS;
+    this.reasoningEffort = opts.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     // Bind to the global scope: native fetch throws "Illegal invocation" if
     // called with a receiver other than the window/worker global.
@@ -92,10 +112,11 @@ export class HCompanyClient implements AgentClient {
             model: this.model,
             temperature: 0,
             max_tokens: this.maxTokens,
+            reasoning_effort: this.reasoningEffort,
             stream: true,
             messages: [
               { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: buildPrompt(input) },
+              { role: 'user', content: buildUserContent(input) },
             ],
           }),
           signal: controller.signal,

@@ -5,6 +5,8 @@ export interface AgentInput {
   pageRep: PageRep;
   base: RestyleRuleSet;
   instruction: string;
+  /** Optional page screenshot (data URL) for multimodal grounding. */
+  screenshot?: string;
 }
 
 export interface AgentProgress {
@@ -23,20 +25,16 @@ export interface AgentClient {
 
 export function buildPrompt(input: AgentInput): string {
   return [
-    'You restyle web pages by returning a JSON RestyleRuleSet.',
-    'Schema: { "version": 1, "ops": Op[], "globalCss": string }.',
-    'Op is one of: {op:"hide",selector}, {op:"restyle",selector,css:{}},',
-    '{op:"move",selector,target,position:"before|after|prepend|append"},',
-    '{op:"reorder",selector,order:[]}, {op:"setText",selector,text}, {op:"wrap",selector,wrapper,className?}.',
-    'globalCss is a scoped CSS string; use it for structural rules like ' +
-      '"tr:nth-child(n+6){display:none}". Prefer stable selectors — element ' +
-      'roles, aria-labels, ids, and semantic tags — over auto-generated class names.',
-    'Return ONLY the JSON object, no prose, no markdown.',
+    'You restyle web pages with CSS. Given the page and a user instruction, produce CSS that achieves it.',
+    'Respond with ONLY a JSON object of the form {"css": "<css rules>"} and nothing else.',
+    'Use "display: none !important" to hide/remove elements; use standard CSS to resize, recolor, reorder (flex/grid order), or rearrange.',
+    'Prefer robust selectors: semantic tags, ARIA roles, aria-labels, ids, and structural selectors like :nth-child. Avoid relying on auto-generated class names when a stable selector exists.',
+    input.screenshot ? 'A screenshot of the page is attached — use it to locate the elements the instruction refers to.' : '',
     `Page URL: ${input.pageRep.url}`,
-    `Current rule set: ${JSON.stringify(input.base).slice(0, 2000)}`,
-    `Page structure (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 6000)}`,
+    `Page DOM (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 6000)}`,
+    input.base.globalCss.trim() ? `Currently applied CSS (keep unless the instruction overrides it): ${input.base.globalCss.slice(0, 1500)}` : '',
     `User instruction: ${input.instruction}`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 export function parseAgentResponse(text: string): RestyleRuleSet {
@@ -44,13 +42,20 @@ export function parseAgentResponse(text: string): RestyleRuleSet {
   const raw = fenced ? fenced[1] : text;
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
-  if (start < 0 || end < 0) throw new Error('No JSON object in agent response');
-  let parsed: unknown;
-  try { parsed = JSON.parse(raw.slice(start, end + 1)); }
+  if (start < 0 || end <= start) throw new Error('No JSON object in agent response');
+
+  let obj: Record<string, unknown>;
+  try { obj = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>; }
   catch (e) { throw new Error(`Agent response is not valid JSON: ${(e as Error).message}`); }
-  const res = validateRuleSet(parsed);
-  if (!res.ok) throw new Error(`Agent rule set invalid: ${res.errors.join('; ')}`);
-  return res.value!;
+
+  // Primary contract: { css: "..." } → a single scoped CSS block.
+  if (typeof obj.css === 'string') {
+    return { version: 1, ops: [], globalCss: obj.css };
+  }
+  // Backward-compatible: a full structured RestyleRuleSet.
+  const res = validateRuleSet(obj);
+  if (res.ok) return res.value!;
+  throw new Error(`Agent response was not usable CSS or rules: ${res.errors.join('; ')}`);
 }
 
 export { MockClient } from './MockClient';

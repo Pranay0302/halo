@@ -6,7 +6,6 @@ import type { PageRep, RestyleRuleSet } from '../../src/shared/types';
 const pageRep: PageRep = { url: 'https://mail.google.com', root: { tag: 'body' } };
 const base: RestyleRuleSet = { version: 1, ops: [], globalCss: '' };
 
-// Build an SSE stream response from chat-completion chunk frames.
 function sseStream(frames: object[]): Response {
   const enc = new TextEncoder();
   const stream = new ReadableStream({
@@ -31,19 +30,20 @@ function jsonResponse(message: object): Response {
 }
 
 describe('HCompanyClient', () => {
-  it('streams reasoning then content, reports both phases, and parses the answer', async () => {
+  it('streams reasoning then CSS content, reports both phases, and parses to globalCss', async () => {
     const fetchImpl = vi.fn(async () => sseStream([
-      delta({ reasoning: 'Let me think ' }),
-      delta({ reasoning: 'about the ad.' }),
-      delta({ content: '{"version":1,"ops":[{"op":"hide",' }),
-      delta({ content: '"selector":".ad"}],"globalCss":""}' }),
+      delta({ reasoning: 'Find the ' }),
+      delta({ reasoning: 'right sidebar.' }),
+      delta({ content: '{"css":"aside' }),
+      delta({ content: '{display:none}"}' }),
     ])) as unknown as typeof fetch;
 
     const events: AgentProgress[] = [];
     const client = new HCompanyClient({ apiKey: 'k-123', fetchImpl });
-    const rs = await client.generate({ pageRep, base, instruction: 'hide ads' }, (p) => events.push(p));
+    const rs = await client.generate({ pageRep, base, instruction: 'remove the right sidebar' }, (p) => events.push(p));
 
-    expect(rs.ops[0]).toMatchObject({ op: 'hide', selector: '.ad' });
+    expect(rs.globalCss).toBe('aside{display:none}');
+    expect(rs.ops).toEqual([]);
     expect(events.some((e) => e.phase === 'thinking')).toBe(true);
     expect(events.some((e) => e.phase === 'answering')).toBe(true);
 
@@ -51,15 +51,34 @@ describe('HCompanyClient', () => {
     expect(url).toBe('https://api.hcompany.ai/v1/chat/completions');
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer k-123' });
     const body = JSON.parse((init as RequestInit).body as string);
-    expect(body).toMatchObject({ model: 'holo3-1-35b-a3b', stream: true });
-    expect(body.max_tokens).toBeGreaterThanOrEqual(4000);
+    expect(body).toMatchObject({ model: 'holo3-1-35b-a3b', stream: true, reasoning_effort: 'low' });
   });
 
-  it('salvages the JSON from reasoning when content is never emitted', async () => {
-    const fetchImpl = vi.fn(async () => sseStream([
-      delta({ reasoning: 'The result should be {"version":1,"ops":[],"globalCss":"body{color:red}"}' }),
-    ])) as unknown as typeof fetch;
+  it('sends the screenshot as multimodal image content when provided', async () => {
+    const fetchImpl = vi.fn(async () => sseStream([delta({ content: '{"css":"body{color:red}"}' })])) as unknown as typeof fetch;
+    const client = new HCompanyClient({ apiKey: 'k', fetchImpl });
+    await client.generate({ pageRep, base, instruction: 'x', screenshot: 'data:image/jpeg;base64,AAAA' });
 
+    const [, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    const userContent = body.messages[1].content;
+    expect(Array.isArray(userContent)).toBe(true);
+    expect(userContent).toContainEqual({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } });
+  });
+
+  it('accepts a full RestyleRuleSet for backward compatibility', async () => {
+    const fetchImpl = vi.fn(async () =>
+      sseStream([delta({ content: '{"version":1,"ops":[{"op":"hide","selector":".ad"}],"globalCss":""}' })]),
+    ) as unknown as typeof fetch;
+    const client = new HCompanyClient({ apiKey: 'k', fetchImpl });
+    const rs = await client.generate({ pageRep, base, instruction: 'x' });
+    expect(rs.ops[0]).toMatchObject({ op: 'hide', selector: '.ad' });
+  });
+
+  it('salvages the CSS JSON from reasoning when content is never emitted', async () => {
+    const fetchImpl = vi.fn(async () => sseStream([
+      delta({ reasoning: 'The result is {"css":"body{color:red}"}' }),
+    ])) as unknown as typeof fetch;
     const client = new HCompanyClient({ apiKey: 'k', fetchImpl });
     const rs = await client.generate({ pageRep, base, instruction: 'x' });
     expect(rs.globalCss).toContain('color:red');
@@ -67,16 +86,15 @@ describe('HCompanyClient', () => {
 
   it('falls back to a non-streamed body with null content', async () => {
     const fetchImpl = vi.fn(async () =>
-      jsonResponse({ content: null, reasoning: 'final answer {"version":1,"ops":[],"globalCss":"a{color:blue}"}' }),
+      jsonResponse({ content: null, reasoning: 'answer {"css":"a{color:blue}"}' }),
     ) as unknown as typeof fetch;
-
     const client = new HCompanyClient({ apiKey: 'k', fetchImpl });
     const rs = await client.generate({ pageRep, base, instruction: 'x' });
     expect(rs.globalCss).toContain('color:blue');
   });
 
   it('honors a custom model override', async () => {
-    const fetchImpl = vi.fn(async () => sseStream([delta({ content: '{"version":1,"ops":[],"globalCss":""}' })])) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(async () => sseStream([delta({ content: '{"css":""}' })])) as unknown as typeof fetch;
     const client = new HCompanyClient({ apiKey: 'k', model: 'holo3-122b-a10b', fetchImpl });
     await client.generate({ pageRep, base, instruction: 'x' });
 
@@ -104,18 +122,16 @@ describe('HCompanyClient', () => {
   });
 
   it('calls the global fetch with the global receiver by default', async () => {
-    // Mimics native fetch, which rejects an unexpected `this` (the cause of the
-    // "Illegal invocation" error when fetch is called as an object method).
     const globalFetch = vi.fn(function (this: unknown) {
       if (this !== globalThis && this !== undefined) throw new TypeError('Illegal invocation');
-      return Promise.resolve(sseStream([delta({ content: '{"version":1,"ops":[],"globalCss":""}' })]));
+      return Promise.resolve(sseStream([delta({ content: '{"css":""}' })]));
     });
     const original = globalThis.fetch;
     (globalThis as any).fetch = globalFetch;
     try {
       const client = new HCompanyClient({ apiKey: 'k' });
       const rs = await client.generate({ pageRep, base, instruction: 'x' });
-      expect(rs.version).toBe(1);
+      expect(rs.globalCss).toBe('');
       expect(globalFetch).toHaveBeenCalled();
     } finally {
       (globalThis as any).fetch = original;

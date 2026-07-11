@@ -12,7 +12,13 @@ describe('agent helpers', () => {
     expect(p).toContain('mail.google.com');
   });
 
-  it('parseAgentResponse extracts fenced JSON and validates', () => {
+  it('parseAgentResponse turns {css} into a globalCss rule set', () => {
+    const rs = parseAgentResponse('{"css":"aside{display:none !important}"}');
+    expect(rs.globalCss).toBe('aside{display:none !important}');
+    expect(rs.ops).toEqual([]);
+  });
+
+  it('parseAgentResponse extracts fenced JSON and validates a full rule set', () => {
     const text = 'Sure!\n```json\n{"version":1,"ops":[{"op":"hide","selector":".ad"}],"globalCss":""}\n```';
     const rs = parseAgentResponse(text);
     expect(rs.ops[0]).toMatchObject({ op: 'hide', selector: '.ad' });
