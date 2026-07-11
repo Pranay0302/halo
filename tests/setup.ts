@@ -18,9 +18,22 @@ const store: Record<string, unknown> = {};
       }),
     },
   },
-  runtime: { sendMessage: vi.fn(), onMessage: { addListener: vi.fn() } },
-  sidePanel: { setPanelBehavior: vi.fn(), open: vi.fn() },
-  tabs: { query: vi.fn(async () => [{ id: 1, url: 'https://mail.google.com/' }]) },
+  runtime: {
+    sendMessage: vi.fn(),
+    onMessage: { addListener: vi.fn() },
+    getManifest: vi.fn(() => ({ content_scripts: [{ js: ['content.js'] }] })),
+  },
+  scripting: { executeScript: vi.fn(async () => []) },
+  sidePanel: { setPanelBehavior: vi.fn(() => Promise.resolve()), open: vi.fn(() => Promise.resolve()) },
+  tabs: {
+    query: vi.fn(async () => [{ id: 1, url: 'https://mail.google.com/' }]),
+    onActivated: { addListener: vi.fn(), removeListener: vi.fn() },
+    onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
+  windows: {
+    WINDOW_ID_NONE: -1,
+    onFocusChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
 };
 
 export function __resetChromeStore() {

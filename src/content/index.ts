@@ -11,6 +11,8 @@ function resetCurrent(): void {
 
 export async function handleMessage(msg: Message): Promise<Responses[keyof Responses]> {
   switch (msg.type) {
+    case 'PING':
+      return { ok: true };
     case 'EXTRACT_PAGE':
       return { pageRep: extractPageRep(document) };
     case 'APPLY_RULESET': {
@@ -27,7 +29,11 @@ export async function handleMessage(msg: Message): Promise<Responses[keyof Respo
   }
 }
 
-if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+// Register once per page, even if this script is injected again on demand
+// (all of an extension's content scripts share one isolated world per page).
+const win = window as unknown as { __hcoContentReady?: boolean };
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage && !win.__hcoContentReady) {
+  win.__hcoContentReady = true;
   chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
     if (!isMessage(raw)) return false;
     handleMessage(raw).then(sendResponse);
