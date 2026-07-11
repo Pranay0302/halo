@@ -68,6 +68,19 @@ describe('HCompanyClient', () => {
     expect(JSON.parse((init as RequestInit).body as string).model).toBe('holo3-122b-a10b');
   });
 
+  it('aborts the request when the external signal fires', async () => {
+    const external = new AbortController();
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    })) as unknown as typeof fetch;
+
+    const client = new HCompanyClient({ apiKey: 'k', fetchImpl });
+    const p = client.generate({ pageRep, base, instruction: 'x' }, undefined, external.signal);
+    external.abort();
+
+    await expect(p).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('throws a helpful error on non-200', async () => {
     const fetchImpl = vi.fn(async () => new Response('nope', { status: 401 })) as unknown as typeof fetch;
     const client = new HCompanyClient({ apiKey: 'bad', fetchImpl });

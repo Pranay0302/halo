@@ -8,7 +8,11 @@ export interface AgentInput {
 }
 
 export interface AgentClient {
-  generate(input: AgentInput, onProgress?: (partial: string) => void): Promise<RestyleRuleSet>;
+  generate(
+    input: AgentInput,
+    onProgress?: (partial: string) => void,
+    signal?: AbortSignal,
+  ): Promise<RestyleRuleSet>;
 }
 
 export function buildPrompt(input: AgentInput): string {

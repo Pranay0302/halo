@@ -20,6 +20,7 @@ export function useAppState() {
   const [activity, setActivity] = useState<string[]>([]);
   const [agentOutput, setAgentOutput] = useState('');
   const current = useRef<RestyleRuleSet>(EMPTY);
+  const inflight = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -72,6 +73,11 @@ export function useAppState() {
   }, [applyRuleSet]);
 
   const generate = useCallback(async (instruction: string) => {
+    // Cancel any request still in flight so a new question isn't queued behind it.
+    inflight.current?.abort();
+    const controller = new AbortController();
+    inflight.current = controller;
+
     setActivity([]);
     setAgentOutput('');
     const log = (line: string) => {
@@ -93,14 +99,19 @@ export function useAppState() {
           setAgentOutput(partial);
           setStatus({ kind: 'busy', message: `Agent responding… (${partial.length} chars)` });
         },
+        controller.signal,
       );
 
       log(`Agent returned ${ruleSet.ops.length} op(s)${ruleSet.globalCss.trim() ? ' + CSS' : ''}. Applying…`);
       await applyRuleSet(ruleSet);
       log('Applied.');
     } catch (e) {
+      // A newer request superseded this one — leave its status alone.
+      if ((e as Error).name === 'AbortError') return;
       log(`Error: ${(e as Error).message}`);
       setStatus({ kind: 'error', message: (e as Error).message });
+    } finally {
+      if (inflight.current === controller) inflight.current = null;
     }
   }, [applyRuleSet, domain]);
 

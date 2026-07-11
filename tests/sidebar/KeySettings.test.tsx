@@ -15,4 +15,25 @@ describe('KeySettings', () => {
     const { apiKey } = await chrome.storage.local.get('apiKey');
     expect(apiKey).toBe('k-999');
   });
+
+  it('loads a previously saved key so it persists across opens', async () => {
+    await chrome.storage.local.set({ apiKey: 'k-persisted' });
+    render(<KeySettings onChange={vi.fn()} />);
+    await waitFor(() =>
+      expect((screen.getByLabelText(/api key/i) as HTMLInputElement).value).toBe('k-persisted'),
+    );
+  });
+
+  it('does not overwrite the stored key when the field is emptied', async () => {
+    await chrome.storage.local.set({ apiKey: 'keep-me' });
+    render(<KeySettings onChange={vi.fn()} />);
+    await waitFor(() =>
+      expect((screen.getByLabelText(/api key/i) as HTMLInputElement).value).toBe('keep-me'),
+    );
+
+    fireEvent.change(screen.getByLabelText(/api key/i), { target: { value: '' } });
+    expect((screen.getByRole('button', { name: /save/i }) as HTMLButtonElement).disabled).toBe(true);
+    const { apiKey } = await chrome.storage.local.get('apiKey');
+    expect(apiKey).toBe('keep-me');
+  });
 });

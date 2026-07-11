@@ -2,7 +2,11 @@ import type { RestyleRuleSet } from '../shared/types';
 import type { AgentClient, AgentInput } from './AgentClient';
 
 export class MockClient implements AgentClient {
-  async generate(input: AgentInput, _onProgress?: (partial: string) => void): Promise<RestyleRuleSet> {
+  async generate(
+    input: AgentInput,
+    _onProgress?: (partial: string) => void,
+    _signal?: AbortSignal,
+  ): Promise<RestyleRuleSet> {
     const hideAds = /\bads?\b/i.test(input.instruction);
     return {
       version: 1,
