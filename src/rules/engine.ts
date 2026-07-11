@@ -6,6 +6,13 @@ export interface ApplyResult {
   reverse: () => void;
 }
 
+// A restyle should never blank the page. If applying it makes almost all of the
+// previously-visible elements disappear, the selector was too broad (e.g. a
+// reused class that also matched the root) and the change must be reverted.
+export function isCatastrophicHide(visibleBefore: number, visibleAfter: number): boolean {
+  return visibleBefore > 20 && visibleAfter < visibleBefore * 0.15;
+}
+
 type Undo = () => void;
 
 function applyOp(root: ParentNode, op: Op, undos: Undo[]): number {

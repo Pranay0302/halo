@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { applyRuleSet } from '../../src/rules/engine';
+import { applyRuleSet, isCatastrophicHide } from '../../src/rules/engine';
 import type { RestyleRuleSet } from '../../src/shared/types';
 
 function setDom(html: string) { document.body.innerHTML = html; }
@@ -47,5 +47,21 @@ describe('applyRuleSet', () => {
   it('counts unmatched selectors', () => {
     const rs: RestyleRuleSet = { version: 1, ops: [{ op: 'hide', selector: '.nope' }], globalCss: '' };
     expect(applyRuleSet(document, rs).unmatched).toBe(1);
+  });
+});
+
+describe('isCatastrophicHide', () => {
+  it('flags a change that hides almost everything', () => {
+    expect(isCatastrophicHide(300, 5)).toBe(true);
+  });
+
+  it('allows normal changes that hide a portion', () => {
+    expect(isCatastrophicHide(300, 250)).toBe(false);
+    expect(isCatastrophicHide(300, 60)).toBe(false);
+  });
+
+  it('never flags on a tiny/near-empty page (avoids false positives)', () => {
+    expect(isCatastrophicHide(10, 0)).toBe(false);
+    expect(isCatastrophicHide(0, 0)).toBe(false);
   });
 });

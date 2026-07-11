@@ -26,10 +26,14 @@ export interface Template {
 export interface PageRepNode {
   tag: string;
   id?: string;
+  /** Unique, stable per-element id (mirrors the DOM's data-halo-id) for exact targeting. */
+  hid?: string;
   classes?: string[];
   role?: string;
   label?: string;
   text?: string;
+  /** Viewport geometry in px, so the agent can locate regions like "the left sidebar". */
+  rect?: { x: number; y: number; w: number; h: number };
   children?: PageRepNode[];
 }
 

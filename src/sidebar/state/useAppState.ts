@@ -58,12 +58,17 @@ export function useAppState() {
     };
   }, [refresh]);
 
-  const applyRuleSet = useCallback(async (rs: RestyleRuleSet) => {
+  const applyRuleSet = useCallback(async (rs: RestyleRuleSet): Promise<boolean> => {
+    const res = await sendToTab<{ unmatched: number; blanked?: boolean }>({ type: 'APPLY_RULESET', ruleSet: rs });
+    if (res.blanked) {
+      setStatus({ kind: 'error', message: 'That change would have hidden the whole page, so I reverted it. Try naming the specific element (e.g. "the left navigation").' });
+      return false;
+    }
     current.current = rs;
-    const res = await sendToTab<{ unmatched: number }>({ type: 'APPLY_RULESET', ruleSet: rs });
     setStatus(res.unmatched > 0
       ? { kind: 'info', message: `${res.unmatched} rule(s) didn't match — the page may have changed.` }
       : { kind: 'idle' });
+    return true;
   }, []);
 
   const applyPreset = useCallback(async (id: string) => {
@@ -119,8 +124,7 @@ export function useAppState() {
         );
 
         log(`Agent returned ${ruleSet.ops.length} op(s)${ruleSet.globalCss.trim() ? ' + CSS' : ''}. Applying…`);
-        await applyRuleSet(ruleSet);
-        log('Applied.');
+        log(await applyRuleSet(ruleSet) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
       } finally {
         clearInterval(ticker);
       }

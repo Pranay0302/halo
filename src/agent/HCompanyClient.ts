@@ -15,8 +15,10 @@ const DEFAULT_MAX_TOKENS = 2000;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 const SYSTEM_PROMPT =
-  'You restyle web pages with CSS. Respond with ONLY a JSON object of the form ' +
-  '{"css":"<css rules>"} — a single JSON object, no prose, no markdown.';
+  'You restyle web pages with CSS. Target elements ONLY via their unique ' +
+  '[data-halo-id="<hid>"] attribute — never class or tag selectors (classes are reused and unsafe). ' +
+  'Change only the element the user names; never hide <body>/<html> or a page-covering wrapper. ' +
+  'Respond with ONLY a JSON object {"css":"<css rules>"} — one JSON object, no prose, no markdown.';
 
 interface Delta {
   content?: string | null;

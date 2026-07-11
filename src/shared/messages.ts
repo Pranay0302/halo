@@ -9,7 +9,7 @@ export type Message =
 export interface Responses {
   PING: { ok: true };
   EXTRACT_PAGE: { pageRep: PageRep };
-  APPLY_RULESET: { unmatched: number };
+  APPLY_RULESET: { unmatched: number; blanked?: boolean };
   RESET: { ok: true };
 }
 

@@ -25,14 +25,16 @@ export interface AgentClient {
 
 export function buildPrompt(input: AgentInput): string {
   return [
-    'You restyle web pages with CSS. Given the page and a user instruction, produce CSS that achieves it.',
+    'You restyle web pages by returning CSS. The user names an element or region; produce CSS that changes ONLY that.',
+    'Every node has a unique "hid". Target elements ONLY with the attribute selector [data-halo-id="<hid>"]. Do NOT write class or tag selectors — class names here are reused across unrelated elements, so a class selector can hide the whole page.',
+    'Each node has a "rect" {x,y,w,h} in pixels. Use it (and the screenshot, if attached) to find the region the user means — a "left sidebar" is tall, narrow, near x=0; a "top bar" spans the width near y=0; the main content is the largest central area.',
+    'Choose the single smallest element (or the few) that IS the named region. NEVER target the <body>, <html>, or a wrapper whose rect covers most of the viewport — that blanks the page.',
+    'Use "display: none !important" to remove; use normal CSS to resize, recolor, or reorder.',
     'Respond with ONLY a JSON object of the form {"css": "<css rules>"} and nothing else.',
-    'Use "display: none !important" to hide/remove elements; use standard CSS to resize, recolor, reorder (flex/grid order), or rearrange.',
-    'Prefer robust selectors: semantic tags, ARIA roles, aria-labels, ids, and structural selectors like :nth-child. Avoid relying on auto-generated class names when a stable selector exists.',
-    input.screenshot ? 'A screenshot of the page is attached — use it to locate the elements the instruction refers to.' : '',
+    input.screenshot ? 'A screenshot of the page is attached.' : '',
     `Page URL: ${input.pageRep.url}`,
-    `Page DOM (truncated): ${JSON.stringify(input.pageRep.root).slice(0, 6000)}`,
-    input.base.globalCss.trim() ? `Currently applied CSS (keep unless the instruction overrides it): ${input.base.globalCss.slice(0, 1500)}` : '',
+    `DOM (each node: tag, hid, role, label, text, rect): ${JSON.stringify(input.pageRep.root).slice(0, 7000)}`,
+    input.base.globalCss.trim() ? `Currently applied CSS (keep unless the instruction overrides it): ${input.base.globalCss.slice(0, 1000)}` : '',
     `User instruction: ${input.instruction}`,
   ].filter(Boolean).join('\n');
 }
