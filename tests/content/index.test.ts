@@ -27,12 +27,19 @@ describe('content handleMessage', () => {
     expect((document.querySelector('.ad') as HTMLElement).style.color).toBe('');
   });
 
+  it('QUICK_STYLE resolves a common command without the agent, and returns null otherwise', async () => {
+    const hit = await handleMessage({ type: 'QUICK_STYLE', instruction: 'dark mode' });
+    expect('ruleSet' in hit && hit.ruleSet?.globalCss).toContain('invert');
+    const miss = await handleMessage({ type: 'QUICK_STYLE', instruction: 'make it look like twitter' });
+    expect('ruleSet' in miss && miss.ruleSet).toBeNull();
+  });
+
   it('GENERALIZE_RULESET rewrites data-halo-id selectors into durable ones', async () => {
     document.body.innerHTML = '<aside role="complementary" data-halo-id="mine">s</aside>';
     const res = await handleMessage({
       type: 'GENERALIZE_RULESET',
       ruleSet: { version: 1, ops: [], globalCss: '[data-halo-id="mine"]{display:none}' },
     });
-    expect('ruleSet' in res && res.ruleSet.globalCss).toBe('aside[role="complementary"]{display:none}');
+    expect('ruleSet' in res && res.ruleSet?.globalCss).toBe('aside[role="complementary"]{display:none}');
   });
 });

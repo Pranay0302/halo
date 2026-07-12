@@ -92,6 +92,15 @@ export function useAppState() {
 
     setStatus({ kind: 'busy', message: 'Reading the page…' });
     try {
+      // Fast-path: resolve common layout commands deterministically in the page —
+      // instant, no network, no rate limit. Only novel requests hit the agent.
+      const quick = await sendToTab<{ ruleSet: RestyleRuleSet | null }>({ type: 'QUICK_STYLE', instruction });
+      if (quick.ruleSet) {
+        log('Recognized a common command — applying instantly (no agent needed).');
+        log(await applyRuleSet(quick.ruleSet) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
+        return;
+      }
+
       const client = await getStoredClient();
       log(`Reading the DOM of ${domain || 'this page'}…`);
       const { pageRep } = await sendToTab<{ pageRep: PageRep }>({ type: 'EXTRACT_PAGE' });

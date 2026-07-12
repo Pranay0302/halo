@@ -3,6 +3,7 @@ import { isMessage } from '../shared/messages';
 import { applyRuleSet, isCatastrophicHide, type ApplyResult } from '../rules/engine';
 import { extractPageRep } from './pageExtract';
 import { generalizeRuleSet } from './durableSelector';
+import { resolveQuickStyle } from './quickStyle';
 
 let currentApply: ApplyResult | null = null;
 
@@ -45,6 +46,10 @@ export async function handleMessage(msg: Message): Promise<Responses[keyof Respo
       currentApply = apply;
       return { unmatched: apply.unmatched };
     }
+    case 'QUICK_STYLE':
+      // Deterministic, instant resolution of common layout commands. Returns
+      // null for anything unrecognized, so the sidebar falls back to the agent.
+      return { ruleSet: resolveQuickStyle(document, msg.instruction) };
     case 'GENERALIZE_RULESET':
       // Convert data-halo-id references into durable selectors so a saved
       // template re-matches on later visits. Re-tag first so the ids resolve.
