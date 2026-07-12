@@ -4,14 +4,13 @@ import { ActivityLog } from '../../src/sidebar/components/ActivityLog';
 
 describe('ActivityLog', () => {
   it('renders nothing when empty', () => {
-    const { container } = render(<ActivityLog steps={[]} output="" />);
+    const { container } = render(<ActivityLog steps={[]} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders steps and the raw agent output', () => {
-    render(<ActivityLog steps={['Reading the DOM…', 'Applied.']} output='{"version":1}' />);
-    expect(screen.getByText('Reading the DOM…')).toBeTruthy();
-    expect(screen.getByText('Applied.')).toBeTruthy();
-    expect(screen.getByText('{"version":1}')).toBeTruthy();
+  it('renders short status steps only (never the raw agent output)', () => {
+    render(<ActivityLog steps={['Reading the page…', 'Applying changes…', 'Done ✓']} />);
+    expect(screen.getByText('Reading the page…')).toBeTruthy();
+    expect(screen.getByText('Done ✓')).toBeTruthy();
   });
 });

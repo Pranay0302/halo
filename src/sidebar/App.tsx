@@ -40,7 +40,7 @@ export function App() {
 
       <StatusBar status={s.status} />
 
-    <ActivityLog steps={s.activity} output={s.agentOutput} />      
+      <ActivityLog steps={s.activity} />
     </main>
   );
 }

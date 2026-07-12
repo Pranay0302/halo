@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PageRep, PageRepNode, Preset, RestyleRuleSet, Template } from '../../shared/types';
+import type { PageRep, Preset, RestyleRuleSet, Template } from '../../shared/types';
 import { PRESETS, getPreset } from '../../rules/presets';
 import { listTemplates, saveTemplate, deleteTemplate as delTemplate, exportTemplates, importTemplates } from '../../storage/templates';
 import { getStoredClient } from '../../agent/stored';
@@ -7,10 +7,6 @@ import { getActiveDomain, sendToTab, captureScreenshot } from './messaging';
 
 export type Status = { kind: 'idle' | 'busy' | 'error' | 'info'; message?: string };
 const EMPTY: RestyleRuleSet = { version: 1, ops: [], globalCss: '' };
-
-function countNodes(node: PageRepNode): number {
-  return 1 + (node.children?.reduce((sum, c) => sum + countNodes(c), 0) ?? 0);
-}
 
 // Stack a new change on top of the existing one. Appending CSS means a later
 // rule wins over an earlier conflicting one (normal cascade), while unrelated
@@ -26,7 +22,6 @@ export function useAppState() {
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [apiKeySet, setApiKeySet] = useState(false);
   const [activity, setActivity] = useState<string[]>([]);
-  const [agentOutput, setAgentOutput] = useState('');
   const current = useRef<RestyleRuleSet>(EMPTY);
   const inflight = useRef<AbortController | null>(null);
 
@@ -95,11 +90,12 @@ export function useAppState() {
     inflight.current = controller;
 
     setActivity([]);
-    setAgentOutput('');
+    // Show short, human status lines — never the raw agent CSS/output.
     const log = (line: string) => {
       console.log('[layout-overlay]', line);
       setActivity((a) => [...a, line]);
     };
+    const finish = (ok: boolean) => log(ok ? 'Done ✓' : 'Skipped — that would have hidden the whole page.');
 
     setStatus({ kind: 'busy', message: 'Reading the page…' });
     try {
@@ -107,29 +103,29 @@ export function useAppState() {
       // instant, no network, no rate limit. Only novel requests hit the agent.
       const quick = await sendToTab<{ ruleSet: RestyleRuleSet | null }>({ type: 'QUICK_STYLE', instruction });
       if (quick.ruleSet) {
-        log('Recognized a common command — applying instantly (no agent needed).');
-        log(await applyRuleSet(quick.ruleSet, true) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
+        log('Applying changes…');
+        finish(await applyRuleSet(quick.ruleSet, true));
         return;
       }
 
       const client = await getStoredClient();
-      log(`Reading the DOM of ${domain || 'this page'}…`);
+      log('Reading the page…');
       // Novel requests need visual grounding to locate a named section, so send
       // a small screenshot alongside the DOM (best-effort; DOM-only if it fails).
       const [{ pageRep }, screenshot] = await Promise.all([
         sendToTab<{ pageRep: PageRep }>({ type: 'EXTRACT_PAGE' }),
         captureScreenshot(),
       ]);
-      log(`Captured ${countNodes(pageRep.root)} elements${screenshot ? ' + screenshot' : ''}. Sending to the agent…`);
 
       // Tick a live elapsed counter while waiting for the first token, so a slow
       // response is visibly progressing instead of looking frozen.
       const started = Date.now();
       let streaming = false;
+      let asked = false;
       const ticker = setInterval(() => {
         if (!streaming) {
           const secs = Math.round((Date.now() - started) / 1000);
-          setStatus({ kind: 'busy', message: `Asking the agent… (${secs}s)` });
+          setStatus({ kind: 'busy', message: `Working on it… (${secs}s)` });
         }
       }, 1000);
 
@@ -138,22 +134,22 @@ export function useAppState() {
           { pageRep, base: current.current, instruction, screenshot },
           (progress) => {
             streaming = true;
-            setAgentOutput(progress.text);
-            const label = progress.phase === 'thinking' ? 'Thinking' : 'Writing changes';
-            setStatus({ kind: 'busy', message: `${label}… (${progress.chars} chars)` });
+            // Short status only — do not surface the raw CSS/reasoning text.
+            setStatus({ kind: 'busy', message: progress.phase === 'thinking' ? 'Figuring out the changes…' : 'Writing the changes…' });
+            if (!asked) { asked = true; log('Working out the changes…'); }
           },
           controller.signal,
         );
 
-        log(`Agent returned ${ruleSet.ops.length} op(s)${ruleSet.globalCss.trim() ? ' + CSS' : ''}. Applying…`);
-        log(await applyRuleSet(ruleSet, true) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
+        log('Applying changes…');
+        finish(await applyRuleSet(ruleSet, true));
       } finally {
         clearInterval(ticker);
       }
     } catch (e) {
       // A newer request superseded this one — leave its status alone.
       if ((e as Error).name === 'AbortError') return;
-      log(`Error: ${(e as Error).message}`);
+      log('Something went wrong.');
       setStatus({ kind: 'error', message: (e as Error).message });
     } finally {
       if (inflight.current === controller) inflight.current = null;
@@ -204,5 +200,5 @@ export function useAppState() {
   }, [domain]);
 
   const presets: Preset[] = PRESETS;
-  return { domain, presets, templates, status, apiKeySet, activity, agentOutput, applyPreset, generate, saveCurrent, applyTemplate, deleteTemplate, reset, exportAll, importAll, refresh };
+  return { domain, presets, templates, status, apiKeySet, activity, applyPreset, generate, saveCurrent, applyTemplate, deleteTemplate, reset, exportAll, importAll, refresh };
 }
