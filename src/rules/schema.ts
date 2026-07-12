@@ -33,6 +33,16 @@ function validateOp(op: unknown, i: number, errors: string[]): void {
   }
 }
 
+// Keep only the well-formed ops, so a single malformed structural op from the
+// model doesn't discard the whole (otherwise valid) response.
+export function filterValidOps(ops: unknown[]): Op[] {
+  return ops.filter((op) => {
+    const errs: string[] = [];
+    validateOp(op, 0, errs);
+    return errs.length === 0;
+  }) as Op[];
+}
+
 export function validateRuleSet(value: unknown): { ok: boolean; errors: string[]; value?: RestyleRuleSet } {
   const errors: string[] = [];
   if (typeof value !== 'object' || value === null) return { ok: false, errors: ['not an object'] };

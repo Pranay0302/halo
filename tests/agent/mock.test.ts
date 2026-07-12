@@ -6,17 +6,33 @@ const pageRep: PageRep = { url: 'https://mail.google.com', root: { tag: 'body' }
 const base: RestyleRuleSet = { version: 1, ops: [], globalCss: '' };
 
 describe('agent helpers', () => {
-  it('buildPrompt includes instruction and url and mandates data-halo-id targeting', () => {
-    const p = buildPrompt({ pageRep, base, instruction: 'hide ads' });
-    expect(p).toContain('hide ads');
+  it('buildPrompt covers full restyling (centering, structure) and mandates data-halo-id', () => {
+    const p = buildPrompt({ pageRep, base, instruction: 'center the header' });
+    expect(p).toContain('center the header');
     expect(p).toContain('mail.google.com');
     expect(p).toContain('data-halo-id');
+    expect(p.toLowerCase()).toContain('center');
+    expect(p).toMatch(/"op":"move"|reorder/);
   });
 
   it('parseAgentResponse turns {css} into a globalCss rule set', () => {
     const rs = parseAgentResponse('{"css":"aside{display:none !important}"}');
     expect(rs.globalCss).toBe('aside{display:none !important}');
     expect(rs.ops).toEqual([]);
+  });
+
+  it('parseAgentResponse accepts {css, ops} for structural changes', () => {
+    const text = '{"css":"body{color:red}","ops":[{"op":"move","selector":"[data-halo-id=\\"h5\\"]","target":"[data-halo-id=\\"h2\\"]","position":"after"}]}';
+    const rs = parseAgentResponse(text);
+    expect(rs.globalCss).toBe('body{color:red}');
+    expect(rs.ops[0]).toMatchObject({ op: 'move', position: 'after' });
+  });
+
+  it('parseAgentResponse accepts ops-only structural moves and drops malformed ops', () => {
+    const text = '{"ops":[{"op":"reorder","selector":"[data-halo-id=\\"h1\\"]","order":["a","b"]},{"op":"bogus"}]}';
+    const rs = parseAgentResponse(text);
+    expect(rs.ops).toHaveLength(1);
+    expect(rs.ops[0].op).toBe('reorder');
   });
 
   it('parseAgentResponse extracts fenced JSON and validates a full rule set', () => {

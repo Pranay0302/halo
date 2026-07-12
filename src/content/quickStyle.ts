@@ -32,11 +32,11 @@ export function parseIntent(instruction: string): Intent | null {
   if (/\b(reader|reading|focus)\s*(mode|view)?\b/.test(s)) return { kind: 'preset', id: 'focus' };
   if (/\b(minimal|declutter|clean up|simplify)\b/.test(s)) return { kind: 'preset', id: 'minimal' };
 
-  // Keep only the main content, drop the chrome around it.
-  if (/\b(keep|show|just)\s+(only\s+)?(the\s+)?(main|content|article|mail|email|reading|post|video)\b/.test(s)
-    || /\bonly\s+(show|keep|the)\b/.test(s)
-    || /(remove|hide)\s+everything\s+else\b/.test(s)
-    || /\bnothing\s+else\b/.test(s)) {
+  // Keep only the GENERIC main content. A specific target ("keep only the
+  // profile") is ambiguous for a heuristic, so it falls through to the agent,
+  // which can see the screenshot and locate that named section.
+  if (/\b(keep|show|just)\b/.test(s) && /\bonly\b/.test(s)
+    && /\b(main content|the content|the article|the post|the video|the feed|the story|reading|the main|the mail|the inbox|the email|the messages)\b/.test(s)) {
     return { kind: 'keepMain' };
   }
 

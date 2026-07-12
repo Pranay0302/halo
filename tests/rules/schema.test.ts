@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateRuleSet } from '../../src/rules/schema';
+import { validateRuleSet, filterValidOps } from '../../src/rules/schema';
 
 const valid = {
   version: 1,
@@ -32,5 +32,17 @@ describe('validateRuleSet', () => {
   it('rejects restyle without a css object', () => {
     const r = validateRuleSet({ version: 1, ops: [{ op: 'restyle', selector: 'a' }], globalCss: '' });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('filterValidOps', () => {
+  it('keeps well-formed ops and drops malformed ones', () => {
+    const ops = filterValidOps([
+      { op: 'move', selector: '#a', target: '#b', position: 'after' },
+      { op: 'move', selector: '#a', target: '#b', position: 'sideways' }, // bad position
+      { op: 'reorder', selector: '#c', order: ['#x', '#y'] },
+      { op: 'bogus' },
+    ]);
+    expect(ops.map((o) => o.op)).toEqual(['move', 'reorder']);
   });
 });

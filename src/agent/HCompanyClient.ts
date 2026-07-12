@@ -9,19 +9,20 @@ const DEFAULT_MODEL = 'holo3-1-35b-a3b';
 // tens of seconds. "low" effort keeps it fast (~1-3s) while still emitting the
 // JSON answer, so the page updates quickly.
 const DEFAULT_REASONING_EFFORT = 'low';
-// Enough headroom that a compound instruction's reasoning can't crowd out the
-// JSON answer (which previously left content empty → parse errors).
-const DEFAULT_MAX_TOKENS = 3000;
+// Enough headroom for a rich "make it pretty" restyle plus reasoning, so the
+// JSON answer is never crowded out (which previously left content empty).
+const DEFAULT_MAX_TOKENS = 4000;
 // Abort if no data arrives for this long. Streaming resets it on every chunk,
 // so a slow-but-steady model keeps going. The model normally answers in ~1-2s;
 // a long silence means the free-tier rate limit was hit, so fail fast and clear.
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT =
-  'You restyle web pages with CSS. Target elements ONLY via their unique ' +
+  'You are a web-page restyling agent. You can change layout, position, size, spacing, alignment, ' +
+  'colors, typography, and structure of the current page. Target elements ONLY via their unique ' +
   '[data-halo-id="<hid>"] attribute — never class or tag selectors (classes are reused and unsafe). ' +
-  'Change only the element the user names; never hide <body>/<html> or a page-covering wrapper. ' +
-  'Respond with ONLY a JSON object {"css":"<css rules>"} — one JSON object, no prose, no markdown.';
+  'Never hide <body>/<html> or a page-covering wrapper. Respond with ONLY one JSON object ' +
+  '{"css":"<css rules>","ops":[<optional structural moves>]} — no prose, no markdown.';
 
 interface Delta {
   content?: string | null;

@@ -1,5 +1,5 @@
 import type { PageRep, RestyleRuleSet } from '../shared/types';
-import { validateRuleSet } from '../rules/schema';
+import { validateRuleSet, filterValidOps } from '../rules/schema';
 
 export interface AgentInput {
   pageRep: PageRep;
@@ -25,16 +25,20 @@ export interface AgentClient {
 
 export function buildPrompt(input: AgentInput): string {
   return [
-    'You restyle web pages by returning CSS. The user names an element or region; produce CSS that changes ONLY that.',
-    'Every node has a unique "hid". Target elements ONLY with the attribute selector [data-halo-id="<hid>"]. Do NOT write class or tag selectors — class names here are reused across unrelated elements, so a class selector can hide the whole page.',
-    'Each node has a "rect" {x,y,w,h} in pixels. Use it (and the screenshot, if attached) to find the region the user means — a "left sidebar" is tall, narrow, near x=0; a "top bar" spans the width near y=0; the main content is the largest central area.',
-    'Choose the single smallest element (or the few) that IS the named region. NEVER target the <body>, <html>, or a wrapper whose rect covers most of the viewport — that blanks the page.',
-    'Use "display: none !important" to remove; use normal CSS to resize, recolor, or reorder.',
-    'Respond with ONLY a JSON object of the form {"css": "<css rules>"} and nothing else.',
-    input.screenshot ? 'A screenshot of the page is attached.' : '',
+    'You are a web-page restyling agent for the CURRENT page. Do whatever the user asks — you can change layout, position, size, spacing, alignment/centering, colors, backgrounds, typography, borders, shadows, rounded corners, visibility, and the overall look (e.g. "make it modern/pretty/minimal").',
+    'Every node has a unique "hid". Target elements ONLY with the attribute selector [data-halo-id="<hid>"]. NEVER use class or tag selectors — class names here are reused across unrelated elements, so they can hit the whole page.',
+    'Each node has a "rect" {x,y,w,h} in pixels; use it (and the screenshot, if attached) to locate what the user means. A "left sidebar" is tall/narrow near x=0; a "top bar" spans the width near y=0; the main content is the largest central area. A named section/card is the ancestor with the LARGER rect that groups a heading + its content — target that whole card, not the small heading/label.',
+    'Prefer CSS for everything you can: center with margin/flex/grid or text-align; rearrange columns with flexbox/grid "order"; reposition with position/transform; resize, recolor, and restyle freely; use "display: none !important" to remove. When asked to "make it pretty/modern", apply cohesive spacing, readable typography, and a consistent palette.',
+    'When the user says "keep only X", hide the OTHER sibling sections around X — never X itself.',
+    "Do not use @import or external url() resources (they are stripped) — for typography use a system font stack like -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif. To center a block, give it a width and margin:auto, or make its parent display:flex with justify/align center.",
+    'For a TRUE structural move that CSS cannot express (relocating a node into a different parent, or reordering siblings), use an "ops" entry instead of CSS.',
+    'NEVER hide/clear <body>, <html>, or a wrapper whose rect covers most of the viewport — that blanks the page.',
+    'Respond with ONLY one JSON object: {"css":"<css rules or empty string>","ops":[<zero or more structural ops>]}. No prose, no markdown.',
+    'Op shapes: {"op":"move","selector":"[data-halo-id=\\"h5\\"]","target":"[data-halo-id=\\"h2\\"]","position":"before"|"after"|"prepend"|"append"} and {"op":"reorder","selector":"<container hid selector>","order":["<child hid selector>",...]}.',
+    input.screenshot ? 'A screenshot of the current page is attached — use it to see the layout, then map to the matching hids/rects.' : '',
     `Page URL: ${input.pageRep.url}`,
     `DOM (each node: tag, hid, role, label, text, rect): ${JSON.stringify(input.pageRep.root).slice(0, 7000)}`,
-    input.base.globalCss.trim() ? `CSS already applied to the page (do NOT repeat it — return ONLY the new change; previous changes are kept automatically): ${input.base.globalCss.slice(0, 800)}` : '',
+    input.base.globalCss.trim() ? `CSS already applied (do NOT repeat it — return ONLY the new change; previous changes are kept automatically): ${input.base.globalCss.slice(0, 800)}` : '',
     `User instruction: ${input.instruction}`,
   ].filter(Boolean).join('\n');
 }
@@ -72,9 +76,19 @@ export function parseAgentResponse(text: string): RestyleRuleSet {
   for (const candidate of balancedObjects(raw)) {
     let obj: Record<string, unknown>;
     try { obj = JSON.parse(candidate) as Record<string, unknown>; } catch { continue; }
-    if (typeof obj.css === 'string') return { version: 1, ops: [], globalCss: obj.css };
-    const res = validateRuleSet(obj);
-    if (res.ok) return res.value!;
+
+    // A full, already-valid RestyleRuleSet.
+    const full = validateRuleSet(obj);
+    if (full.ok) return full.value!;
+
+    // The { css, ops } contract: CSS for styling, optional structural ops.
+    // Accept when a css string is present (even empty) or at least one op is
+    // valid; a malformed full ruleset (no css key, no valid ops) still throws.
+    const hasCss = typeof obj.css === 'string';
+    const ops = Array.isArray(obj.ops) ? filterValidOps(obj.ops as unknown[]) : [];
+    if (hasCss || ops.length) {
+      return { version: 1, ops, globalCss: hasCss ? (obj.css as string) : '' };
+    }
   }
   throw new Error('Agent response contained no usable CSS or rules');
 }

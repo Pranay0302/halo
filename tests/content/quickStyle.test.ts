@@ -13,6 +13,9 @@ describe('parseIntent', () => {
     ['remove the top and left bar', { kind: 'hideRegions', regions: ['top', 'left'] }],
     ['keep only the mail, remove everything else', { kind: 'keepMain' }],
     ['keep only the content', { kind: 'keepMain' }],
+    // A specific named target is ambiguous for the heuristic → defer to the agent.
+    ['keep only the profile and remove everything else', null],
+    ['remove the analytics section', null],
     ['dark mode', { kind: 'preset', id: 'dark' }],
     ['reader mode', { kind: 'preset', id: 'focus' }],
     ['remove ads', { kind: 'hideAds' }],
