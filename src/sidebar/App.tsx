@@ -23,7 +23,7 @@ export function App() {
 
       <PresetGallery presets={s.presets} onApply={s.applyPreset} />
 
-      <PromptBox onSubmit={s.generate} disabled={!keySet && !s.apiKeySet} />
+      <PromptBox onSubmit={s.generate} disabled={!keySet && !s.apiKeySet} busy={s.status.kind === 'busy'} />
 
       <div className="actions">
         <button className="btn" onClick={() => { const n = prompt('Template name?'); if (n) void s.saveCurrent(n); }}>

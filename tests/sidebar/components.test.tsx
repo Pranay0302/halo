@@ -22,6 +22,15 @@ describe('sidebar components', () => {
     expect(onSubmit).toHaveBeenCalledWith('hide ads');
   });
 
+  it('PromptBox shows a loading state and is disabled while busy', () => {
+    const onSubmit = vi.fn();
+    render(<PromptBox onSubmit={onSubmit} busy />);
+    const button = screen.getByRole('button', { name: /working/i });
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.click(button);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('TemplateList renders and applies/deletes', () => {
     const t: Template = { id: 't1', name: 'My Gmail', domain: 'mail.google.com', presetBase: null, instructionHistory: [], ruleSet: { version: 1, ops: [], globalCss: '' }, createdAt: 1, updatedAt: 1 };
     const onApply = vi.fn(); const onDelete = vi.fn();

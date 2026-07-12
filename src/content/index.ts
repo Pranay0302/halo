@@ -68,7 +68,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage && !win.__hcoCont
   win.__hcoContentReady = true;
   chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
     if (!isMessage(raw)) return false;
-    handleMessage(raw).then(sendResponse);
+    // Always send a response — even on error — so the message channel closes
+    // cleanly instead of logging "message channel closed before a response".
+    handleMessage(raw)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ error: (e as Error)?.message ?? String(e) }));
     return true;
   });
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export function PromptBox({ onSubmit, disabled }: { onSubmit: (text: string) => void; disabled?: boolean }) {
+export function PromptBox({ onSubmit, disabled, busy }: { onSubmit: (text: string) => void; disabled?: boolean; busy?: boolean }) {
   const [text, setText] = useState('');
   return (
     <section className="section">
@@ -11,10 +11,16 @@ export function PromptBox({ onSubmit, disabled }: { onSubmit: (text: string) => 
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
+        disabled={busy}
         placeholder="e.g. hide the right sidebar and enlarge fonts"
       />
-      <button className="btn btn--primary" disabled={disabled || !text.trim()} onClick={() => onSubmit(text.trim())}>
-        Generate
+      <button
+        className="btn btn--primary"
+        disabled={disabled || busy || !text.trim()}
+        aria-busy={busy || undefined}
+        onClick={() => onSubmit(text.trim())}
+      >
+        {busy ? <><span className="spinner" aria-hidden="true" />Working…</> : 'Generate'}
       </button>
     </section>
   );

@@ -113,6 +113,28 @@ body {
   border-color: var(--accent-strong);
 }
 
+/* A busy button keeps its accent colour (not the dim disabled look) and shows a spinner. */
+.btn--primary[aria-busy='true'] {
+  opacity: 1;
+  cursor: progress;
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 7px;
+  vertical-align: -1px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .btn--icon {
   padding: 6px 9px;
   color: var(--muted);
