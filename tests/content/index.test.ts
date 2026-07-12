@@ -26,4 +26,13 @@ describe('content handleMessage', () => {
     await handleMessage({ type: 'APPLY_RULESET', ruleSet: { version: 1, ops: [], globalCss: '' } });
     expect((document.querySelector('.ad') as HTMLElement).style.color).toBe('');
   });
+
+  it('GENERALIZE_RULESET rewrites data-halo-id selectors into durable ones', async () => {
+    document.body.innerHTML = '<aside role="complementary" data-halo-id="mine">s</aside>';
+    const res = await handleMessage({
+      type: 'GENERALIZE_RULESET',
+      ruleSet: { version: 1, ops: [], globalCss: '[data-halo-id="mine"]{display:none}' },
+    });
+    expect('ruleSet' in res && res.ruleSet.globalCss).toBe('aside[role="complementary"]{display:none}');
+  });
 });

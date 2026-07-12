@@ -2,6 +2,7 @@ import type { Message, Responses } from '../shared/messages';
 import { isMessage } from '../shared/messages';
 import { applyRuleSet, isCatastrophicHide, type ApplyResult } from '../rules/engine';
 import { extractPageRep } from './pageExtract';
+import { generalizeRuleSet } from './durableSelector';
 
 let currentApply: ApplyResult | null = null;
 
@@ -44,6 +45,11 @@ export async function handleMessage(msg: Message): Promise<Responses[keyof Respo
       currentApply = apply;
       return { unmatched: apply.unmatched };
     }
+    case 'GENERALIZE_RULESET':
+      // Convert data-halo-id references into durable selectors so a saved
+      // template re-matches on later visits. Re-tag first so the ids resolve.
+      extractPageRep(document);
+      return { ruleSet: generalizeRuleSet(document, msg.ruleSet) };
     case 'RESET':
       resetCurrent();
       return { ok: true };

@@ -11,25 +11,6 @@ export async function getActiveDomain(): Promise<string> {
   try { return new URL(tab.url ?? '').hostname; } catch { return ''; }
 }
 
-// Screenshot of the visible tab for multimodal grounding. Returns undefined on
-// restricted pages so the flow falls back to DOM-only. Use a 1s timeout to avoid
-// hanging on page capture, which can block the sidebar UI.
-export async function captureScreenshot(): Promise<string | undefined> {
-  try {
-    const tab = await getActiveTab();
-    const timeout = new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error('screenshot timeout')), 1000);
-    });
-    const shot = await Promise.race([
-      chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 60 }),
-      timeout,
-    ]);
-    return shot;
-  } catch {
-    return undefined;
-  }
-}
-
 async function ping(tabId: number): Promise<boolean> {
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'PING' } as Message);

@@ -11,8 +11,9 @@ const DEFAULT_MODEL = 'holo3-1-35b-a3b';
 const DEFAULT_REASONING_EFFORT = 'low';
 const DEFAULT_MAX_TOKENS = 2000;
 // Abort if no data arrives for this long. Streaming resets it on every chunk,
-// so a slow-but-steady model keeps going instead of hitting a hard wall.
-const DEFAULT_TIMEOUT_MS = 60_000;
+// so a slow-but-steady model keeps going. The model normally answers in ~1-2s;
+// a long silence means the free-tier rate limit was hit, so fail fast and clear.
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT =
   'You restyle web pages with CSS. Target elements ONLY via their unique ' +

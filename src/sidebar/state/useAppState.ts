@@ -3,7 +3,7 @@ import type { PageRep, PageRepNode, Preset, RestyleRuleSet, Template } from '../
 import { PRESETS, getPreset } from '../../rules/presets';
 import { listTemplates, saveTemplate, deleteTemplate as delTemplate, exportTemplates, importTemplates } from '../../storage/templates';
 import { getStoredClient } from '../../agent/stored';
-import { getActiveDomain, sendToTab, captureScreenshot } from './messaging';
+import { getActiveDomain, sendToTab } from './messaging';
 
 export type Status = { kind: 'idle' | 'busy' | 'error' | 'info'; message?: string };
 const EMPTY: RestyleRuleSet = { version: 1, ops: [], globalCss: '' };
@@ -94,11 +94,8 @@ export function useAppState() {
     try {
       const client = await getStoredClient();
       log(`Reading the DOM of ${domain || 'this page'}…`);
-      const [{ pageRep }, screenshot] = await Promise.all([
-        sendToTab<{ pageRep: PageRep }>({ type: 'EXTRACT_PAGE' }),
-        captureScreenshot(),
-      ]);
-      log(`Captured ${countNodes(pageRep.root)} elements${screenshot ? ' + screenshot' : ''}. Sending to the agent…`);
+      const { pageRep } = await sendToTab<{ pageRep: PageRep }>({ type: 'EXTRACT_PAGE' });
+      log(`Captured ${countNodes(pageRep.root)} elements. Sending to the agent…`);
 
       // Tick a live elapsed counter while waiting for the first token, so a slow
       // response is visibly progressing instead of looking frozen.
@@ -113,7 +110,7 @@ export function useAppState() {
 
       try {
         const ruleSet = await client.generate(
-          { pageRep, base: current.current, instruction, screenshot },
+          { pageRep, base: current.current, instruction },
           (progress) => {
             streaming = true;
             setAgentOutput(progress.text);
@@ -140,9 +137,18 @@ export function useAppState() {
 
   const saveCurrent = useCallback(async (name: string) => {
     const now = Date.now();
+    // Convert data-halo-id references to durable selectors so the template
+    // re-matches on future visits (hids are reassigned on every page load).
+    let ruleSet = current.current;
+    try {
+      const res = await sendToTab<{ ruleSet?: RestyleRuleSet }>({ type: 'GENERALIZE_RULESET', ruleSet });
+      if (res?.ruleSet) ruleSet = res.ruleSet;
+    } catch {
+      // Content script unavailable — fall back to saving as-is.
+    }
     await saveTemplate({
       id: `${domain}:${now}`, name, domain, presetBase: null,
-      instructionHistory: [], ruleSet: current.current, createdAt: now, updatedAt: now,
+      instructionHistory: [], ruleSet, createdAt: now, updatedAt: now,
     });
     setTemplates(await listTemplates(domain));
     setStatus({ kind: 'info', message: 'Template saved.' });
