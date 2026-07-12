@@ -3,13 +3,14 @@ import { parseIntent, regionScore, pickRegion, resolveQuickStyle, type RegionCan
 
 describe('parseIntent', () => {
   const cases: Array<[string, ReturnType<typeof parseIntent>]> = [
-    ['hide the left sidebar', { kind: 'hideRegion', region: 'left' }],
-    ['remove the left nav', { kind: 'hideRegion', region: 'left' }],
-    ['remove the right sidebar', { kind: 'hideRegion', region: 'right' }],
-    ['hide the right side panel', { kind: 'hideRegion', region: 'right' }],
-    ['remove the header', { kind: 'hideRegion', region: 'top' }],
-    ['hide the top bar', { kind: 'hideRegion', region: 'top' }],
-    ['remove the footer', { kind: 'hideRegion', region: 'bottom' }],
+    ['hide the left sidebar', { kind: 'hideRegions', regions: ['left'] }],
+    ['remove the left nav', { kind: 'hideRegions', regions: ['left'] }],
+    ['remove the right sidebar', { kind: 'hideRegions', regions: ['right'] }],
+    ['hide the right side panel', { kind: 'hideRegions', regions: ['right'] }],
+    ['remove the header', { kind: 'hideRegions', regions: ['top'] }],
+    ['hide the top bar', { kind: 'hideRegions', regions: ['top'] }],
+    ['remove the footer', { kind: 'hideRegions', regions: ['bottom'] }],
+    ['remove the top and left bar', { kind: 'hideRegions', regions: ['top', 'left'] }],
     ['keep only the mail, remove everything else', { kind: 'keepMain' }],
     ['keep only the content', { kind: 'keepMain' }],
     ['dark mode', { kind: 'preset', id: 'dark' }],
@@ -17,6 +18,7 @@ describe('parseIntent', () => {
     ['remove ads', { kind: 'hideAds' }],
     ['make it look like twitter', null],
     ['change the font to comic sans', null],
+    ['remove the top result', null],
     ['', null],
   ];
   it.each(cases)('parses %j', (input, expected) => {

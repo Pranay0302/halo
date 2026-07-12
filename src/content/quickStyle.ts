@@ -10,7 +10,7 @@ import { extractPageRep } from './pageExtract';
 export type Region = 'left' | 'right' | 'top' | 'bottom';
 export type Intent =
   | { kind: 'preset'; id: string }
-  | { kind: 'hideRegion'; region: Region }
+  | { kind: 'hideRegions'; regions: Region[] }
   | { kind: 'hideAds' }
   | { kind: 'keepMain' };
 
@@ -42,12 +42,15 @@ export function parseIntent(instruction: string): Intent | null {
 
   if (REMOVE.test(s)) {
     if (/\bad(s|vert|verts|vertisement|vertisements)?\b/.test(s)) return { kind: 'hideAds' };
-    const isSide = /\b(side\s*bar|sidebar|side\s*panel|nav|navigation|panel|menu|column|rail)\b/.test(s);
-    if (/\bleft\b/.test(s) && isSide) return { kind: 'hideRegion', region: 'left' };
-    if (/\bright\b/.test(s) && isSide) return { kind: 'hideRegion', region: 'right' };
-    if (/\b(top\s*bar|header|banner|nav\s*bar|navbar|top\s+navigation)\b/.test(s)) return { kind: 'hideRegion', region: 'top' };
-    if (/\b(footer|bottom\s*bar)\b/.test(s)) return { kind: 'hideRegion', region: 'bottom' };
-    if (/\b(side\s*bar|sidebar|side\s*panel)\b/.test(s)) return { kind: 'hideRegion', region: 'left' };
+    // Collect every region mentioned so "remove the top and left bar" hides both.
+    const regions: Region[] = [];
+    const isSide = /\b(side\s*bar|sidebar|side\s*panel|nav|navigation|panel|menu|column|rail|bar)\b/.test(s);
+    if (/\b(header|banner|top\s*bar|nav\s*bar|navbar|top\s+navigation)\b/.test(s) || (/\btop\b/.test(s) && /\bbar\b/.test(s))) regions.push('top');
+    if (/\bfooter\b/.test(s) || (/\bbottom\b/.test(s) && /\bbar\b/.test(s))) regions.push('bottom');
+    if (/\bleft\b/.test(s) && isSide) regions.push('left');
+    if (/\bright\b/.test(s) && isSide) regions.push('right');
+    if (!regions.includes('left') && !regions.includes('right') && /\b(side\s*bar|sidebar|side\s*panel)\b/.test(s)) regions.push('left');
+    if (regions.length) return { kind: 'hideRegions', regions };
   }
   return null;
 }
@@ -145,8 +148,8 @@ export function resolveQuickStyle(root: Document, instruction: string): RestyleR
   const vh = root.defaultView?.innerHeight || 800;
   const cands = candidatesFrom(root);
 
-  if (intent.kind === 'hideRegion') {
-    const hids = pickRegion(cands, intent.region, vw, vh);
+  if (intent.kind === 'hideRegions') {
+    const hids = [...new Set(intent.regions.flatMap((r) => pickRegion(cands, r, vw, vh)))];
     return hids.length ? { version: 1, ops: [], globalCss: hideCss(hids) } : null;
   }
   // keepMain

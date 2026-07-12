@@ -34,30 +34,49 @@ export function buildPrompt(input: AgentInput): string {
     input.screenshot ? 'A screenshot of the page is attached.' : '',
     `Page URL: ${input.pageRep.url}`,
     `DOM (each node: tag, hid, role, label, text, rect): ${JSON.stringify(input.pageRep.root).slice(0, 7000)}`,
-    input.base.globalCss.trim() ? `Currently applied CSS (keep unless the instruction overrides it): ${input.base.globalCss.slice(0, 1000)}` : '',
+    input.base.globalCss.trim() ? `CSS already applied to the page (do NOT repeat it — return ONLY the new change; previous changes are kept automatically): ${input.base.globalCss.slice(0, 800)}` : '',
     `User instruction: ${input.instruction}`,
   ].filter(Boolean).join('\n');
+}
+
+// Yield every top-level balanced {...} substring, ignoring braces inside JSON
+// strings. This survives reasoning models that wrap the JSON in prose.
+function balancedObjects(text: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    let depth = 0, inStr = false, esc = false;
+    for (let j = i; j < text.length; j++) {
+      const ch = text[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) { out.push(text.slice(i, j + 1)); i = j; break; }
+      }
+    }
+  }
+  return out;
 }
 
 export function parseAgentResponse(text: string): RestyleRuleSet {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const raw = fenced ? fenced[1] : text;
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('No JSON object in agent response');
 
-  let obj: Record<string, unknown>;
-  try { obj = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>; }
-  catch (e) { throw new Error(`Agent response is not valid JSON: ${(e as Error).message}`); }
-
-  // Primary contract: { css: "..." } → a single scoped CSS block.
-  if (typeof obj.css === 'string') {
-    return { version: 1, ops: [], globalCss: obj.css };
+  // Try each balanced JSON object until one is usable — robust to prose,
+  // reasoning, or trailing text around the actual answer.
+  for (const candidate of balancedObjects(raw)) {
+    let obj: Record<string, unknown>;
+    try { obj = JSON.parse(candidate) as Record<string, unknown>; } catch { continue; }
+    if (typeof obj.css === 'string') return { version: 1, ops: [], globalCss: obj.css };
+    const res = validateRuleSet(obj);
+    if (res.ok) return res.value!;
   }
-  // Backward-compatible: a full structured RestyleRuleSet.
-  const res = validateRuleSet(obj);
-  if (res.ok) return res.value!;
-  throw new Error(`Agent response was not usable CSS or rules: ${res.errors.join('; ')}`);
+  throw new Error('Agent response contained no usable CSS or rules');
 }
 
 export { MockClient } from './MockClient';

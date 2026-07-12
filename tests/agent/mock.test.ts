@@ -25,6 +25,12 @@ describe('agent helpers', () => {
     expect(rs.ops[0]).toMatchObject({ op: 'hide', selector: '.ad' });
   });
 
+  it('parseAgentResponse extracts the JSON even when wrapped in reasoning/prose', () => {
+    const text = 'The user wants to remove the top and left bar.\nLooking at the DOM {gb} I decide:\n{"css":"[data-halo-id=\\"h2\\"]{display:none}"}\nThat should do it.';
+    const rs = parseAgentResponse(text);
+    expect(rs.globalCss).toBe('[data-halo-id="h2"]{display:none}');
+  });
+
   it('parseAgentResponse throws on invalid rule set', () => {
     expect(() => parseAgentResponse('{"version":1,"ops":[{"op":"nuke"}],"globalCss":""}')).toThrow();
   });

@@ -12,6 +12,14 @@ function countNodes(node: PageRepNode): number {
   return 1 + (node.children?.reduce((sum, c) => sum + countNodes(c), 0) ?? 0);
 }
 
+// Stack a new change on top of the existing one. Appending CSS means a later
+// rule wins over an earlier conflicting one (normal cascade), while unrelated
+// earlier changes are preserved.
+export function mergeRuleSets(base: RestyleRuleSet, delta: RestyleRuleSet): RestyleRuleSet {
+  const css = [base.globalCss.trim(), delta.globalCss.trim()].filter(Boolean).join('\n');
+  return { version: 1, ops: [...base.ops, ...delta.ops], globalCss: css };
+}
+
 export function useAppState() {
   const [domain, setDomain] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -58,13 +66,16 @@ export function useAppState() {
     };
   }, [refresh]);
 
-  const applyRuleSet = useCallback(async (rs: RestyleRuleSet): Promise<boolean> => {
-    const res = await sendToTab<{ unmatched: number; blanked?: boolean }>({ type: 'APPLY_RULESET', ruleSet: rs });
+  // `merge` stacks the new change on top of what's already applied, so an
+  // earlier command persists when a later one runs. Presets/templates replace.
+  const applyRuleSet = useCallback(async (rs: RestyleRuleSet, merge = false): Promise<boolean> => {
+    const target = merge ? mergeRuleSets(current.current, rs) : rs;
+    const res = await sendToTab<{ unmatched: number; blanked?: boolean }>({ type: 'APPLY_RULESET', ruleSet: target });
     if (res.blanked) {
       setStatus({ kind: 'error', message: 'That change would have hidden the whole page, so I reverted it. Try naming the specific element (e.g. "the left navigation").' });
       return false;
     }
-    current.current = rs;
+    current.current = target;
     setStatus(res.unmatched > 0
       ? { kind: 'info', message: `${res.unmatched} rule(s) didn't match — the page may have changed.` }
       : { kind: 'idle' });
@@ -97,7 +108,7 @@ export function useAppState() {
       const quick = await sendToTab<{ ruleSet: RestyleRuleSet | null }>({ type: 'QUICK_STYLE', instruction });
       if (quick.ruleSet) {
         log('Recognized a common command — applying instantly (no agent needed).');
-        log(await applyRuleSet(quick.ruleSet) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
+        log(await applyRuleSet(quick.ruleSet, true) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
         return;
       }
 
@@ -130,7 +141,7 @@ export function useAppState() {
         );
 
         log(`Agent returned ${ruleSet.ops.length} op(s)${ruleSet.globalCss.trim() ? ' + CSS' : ''}. Applying…`);
-        log(await applyRuleSet(ruleSet) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
+        log(await applyRuleSet(ruleSet, true) ? 'Applied.' : 'Reverted — the change would have blanked the page.');
       } finally {
         clearInterval(ticker);
       }

@@ -9,7 +9,9 @@ const DEFAULT_MODEL = 'holo3-1-35b-a3b';
 // tens of seconds. "low" effort keeps it fast (~1-3s) while still emitting the
 // JSON answer, so the page updates quickly.
 const DEFAULT_REASONING_EFFORT = 'low';
-const DEFAULT_MAX_TOKENS = 2000;
+// Enough headroom that a compound instruction's reasoning can't crowd out the
+// JSON answer (which previously left content empty → parse errors).
+const DEFAULT_MAX_TOKENS = 3000;
 // Abort if no data arrives for this long. Streaming resets it on every chunk,
 // so a slow-but-steady model keeps going. The model normally answers in ~1-2s;
 // a long silence means the free-tier rate limit was hit, so fail fast and clear.
