@@ -23,13 +23,38 @@ export interface AgentClient {
   ): Promise<RestyleRuleSet>;
 }
 
+const DESIGN_TOKENS = [
+  'DESIGN TOKENS (use ONLY these values, for a cohesive on-system look):',
+  '- radius: 12px on cards, 8px on buttons/inputs.',
+  '- shadow: 0 1px 2px rgba(0,0,0,0.06) (sm) or 0 4px 12px rgba(0,0,0,0.08) (md).',
+  '- type scale: 13 / 15 / 20 / 28px; line-height 1.5; headings font-weight 600, letter-spacing -0.01em.',
+  "- font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif.",
+  '- keep the page\'s EXISTING accent and background colors; match the current light/dark theme from the screenshot.',
+].join('\n');
+
+const SAFE_POLISH = [
+  'SAFE POLISH MODE (broad aesthetic request): make it look cleaner WITHOUT breaking the layout.',
+  '- Set ONLY these additive properties: border-radius, box-shadow, border, background (a SUBTLE tint that matches the current theme), color (only to fix readability), font-family, font-size, font-weight, line-height, letter-spacing, text-align, opacity, transition.',
+  '- NEVER set layout properties on the site\'s elements: no display, position, float, width, height, min/max-width, min/max-height, margin, padding, gap, top/right/bottom/left, flex, grid, transform, overflow. Those break the page.',
+  '- Apply the tokens consistently to the main CONTENT CARDS (the section/card ancestors) only — never to <body>/<html> or large wrappers.',
+  '- Match the theme from the screenshot: on a LIGHT page use white/near-white card backgrounds; on a DARK page use a subtle elevated tint like rgba(255,255,255,0.05) — NEVER a solid white card on a dark page.',
+  '- No full-page backgrounds, no gradients, no clashing colors. Fewer, consistent rules beat a sweeping repaint.',
+].join('\n');
+
+export function isAestheticRequest(instruction: string): boolean {
+  const t = instruction.toLowerCase();
+  return /\b(pretty|prettier|nice|nicer|clean|cleaner|modern|beautiful|aesthetic|polish|stylish|sleek|elegant|gorgeous|professional|look good|looks good|look nice|nicely|design)\b/.test(t);
+}
+
 export function buildPrompt(input: AgentInput): string {
+  const aesthetic = isAestheticRequest(input.instruction);
   return [
-    'You are a web-page restyling agent for the CURRENT page. Do whatever the user asks — you can change layout, position, size, spacing, alignment/centering, colors, backgrounds, typography, borders, shadows, rounded corners, visibility, and the overall look (e.g. "make it modern/pretty/minimal").',
+    'You are a web-page restyling agent for the CURRENT page. For a SPECIFIC request (center X, move Y, make Z wider, recolor W, hide V) do exactly that — layout changes are allowed. For a BROAD aesthetic request ("make it pretty/cleaner/nicer/modern") use SAFE POLISH MODE below and do NOT change layout.',
     'Every node has a unique "hid". Target elements ONLY with the attribute selector [data-halo-id="<hid>"]. NEVER use class or tag selectors — class names here are reused across unrelated elements, so they can hit the whole page.',
     'Each node has a "rect" {x,y,w,h} in pixels; use it (and the screenshot, if attached) to locate what the user means. A "left sidebar" is tall/narrow near x=0; a "top bar" spans the width near y=0; the main content is the largest central area. A named section/card is the ancestor with the LARGER rect that groups a heading + its content — target that whole card, not the small heading/label.',
-    'Prefer CSS for everything you can: center with margin/flex/grid or text-align; rearrange columns with flexbox/grid "order"; reposition with position/transform; resize, recolor, and restyle freely; use "display: none !important" to remove.',
-    'When asked to make the page prettier/nicer/cleaner/modern, make TASTEFUL, RESTRAINED refinements that FIT the page\'s existing style — read the screenshot to see the current theme (e.g. light vs dark) and stay consistent with it. Good moves: consistent padding/spacing, readable font-size and line-height, rounded corners and a subtle shadow on content cards, clearer hierarchy. AVOID: loud full-page backgrounds or gradients, changing the overall color scheme, setting a background on <body>/<html> or large wrappers, or bright colors that clash — these look broken. A few well-targeted rules on the main content cards look cleaner than a sweeping repaint.',
+    'For a specific request, prefer CSS: center with margin/flex/grid or text-align; rearrange columns with flexbox/grid "order"; reposition with position/transform; resize, recolor, restyle freely; use "display: none !important" to remove.',
+    DESIGN_TOKENS,
+    aesthetic ? SAFE_POLISH : '',
     'When the user says "keep only X", hide the OTHER sibling sections around X — never X itself.',
     "Do not use @import or external url() resources (they are stripped) — for typography use a system font stack like -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif. To center a block, give it a width and margin:auto, or make its parent display:flex with justify/align center.",
     'For a TRUE structural move that CSS cannot express (relocating a node into a different parent, or reordering siblings), use an "ops" entry instead of CSS.',

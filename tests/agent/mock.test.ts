@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MockClient, buildPrompt, parseAgentResponse } from '../../src/agent/AgentClient';
+import { MockClient, buildPrompt, parseAgentResponse, isAestheticRequest } from '../../src/agent/AgentClient';
 import type { PageRep, RestyleRuleSet } from '../../src/shared/types';
 
 const pageRep: PageRep = { url: 'https://mail.google.com', root: { tag: 'body' } };
@@ -13,6 +13,18 @@ describe('agent helpers', () => {
     expect(p).toContain('data-halo-id');
     expect(p.toLowerCase()).toContain('center');
     expect(p).toMatch(/"op":"move"|reorder/);
+  });
+
+  it('adds SAFE POLISH MODE for aesthetic requests but not for specific ones', () => {
+    expect(isAestheticRequest('make this look pretty')).toBe(true);
+    expect(isAestheticRequest('remove the left sidebar')).toBe(false);
+
+    const pretty = buildPrompt({ pageRep, base, instruction: 'make this cleaner' });
+    expect(pretty).toContain('DESIGN TOKENS');
+    expect(pretty).toMatch(/NEVER set layout properties/);
+
+    const specific = buildPrompt({ pageRep, base, instruction: 'move the right sidebar to the left' });
+    expect(specific).not.toMatch(/NEVER set layout properties/);
   });
 
   it('parseAgentResponse turns {css} into a globalCss rule set', () => {
