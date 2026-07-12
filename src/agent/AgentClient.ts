@@ -33,7 +33,8 @@ export function buildPrompt(input: AgentInput): string {
     "Do not use @import or external url() resources (they are stripped) — for typography use a system font stack like -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif. To center a block, give it a width and margin:auto, or make its parent display:flex with justify/align center.",
     'For a TRUE structural move that CSS cannot express (relocating a node into a different parent, or reordering siblings), use an "ops" entry instead of CSS.',
     'NEVER hide/clear <body>, <html>, or a wrapper whose rect covers most of the viewport — that blanks the page.',
-    'Respond with ONLY one JSON object: {"css":"<css rules or empty string>","ops":[<zero or more structural ops>]}. No prose, no markdown.',
+    'Be CONCISE: return a SMALL, focused set of high-impact rules (typically under ~1200 characters of CSS) — do NOT write an exhaustive stylesheet for every element. A few well-chosen rules that clearly change the page beat a giant one that gets truncated.',
+    'Respond with ONLY one JSON object: {"css":"<css rules or empty string>","ops":[<zero or more structural ops>]}. No prose, no markdown, no explanation.',
     'Op shapes: {"op":"move","selector":"[data-halo-id=\\"h5\\"]","target":"[data-halo-id=\\"h2\\"]","position":"before"|"after"|"prepend"|"append"} and {"op":"reorder","selector":"<container hid selector>","order":["<child hid selector>",...]}.',
     input.screenshot ? 'A screenshot of the current page is attached — use it to see the layout, then map to the matching hids/rects.' : '',
     `Page URL: ${input.pageRep.url}`,
@@ -90,6 +91,17 @@ export function parseAgentResponse(text: string): RestyleRuleSet {
       return { version: 1, ops, globalCss: hasCss ? (obj.css as string) : '' };
     }
   }
+
+  // Salvage: the model ran long and its JSON was truncated mid-string (no
+  // closing brace). Recover the partial "css" value — the browser ignores the
+  // incomplete trailing rule and applies the rest, so the page still changes.
+  const partial = raw.match(/"css"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  if (partial && partial[1].trim()) {
+    let css = partial[1];
+    try { css = JSON.parse(`"${css}"`); } catch { css = css.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\'); }
+    if (css.trim()) return { version: 1, ops: [], globalCss: css };
+  }
+
   throw new Error('Agent response contained no usable CSS or rules');
 }
 

@@ -47,6 +47,12 @@ describe('agent helpers', () => {
     expect(rs.globalCss).toBe('[data-halo-id="h2"]{display:none}');
   });
 
+  it('parseAgentResponse salvages partial CSS from a response truncated mid-string', () => {
+    const truncated = '{"css":"[data-halo-id=\\"h1\\"]{font-family:sans-serif} [data-halo-id=\\"h5\\"]{background:linear-gradient(135deg,#667';
+    const rs = parseAgentResponse(truncated);
+    expect(rs.globalCss).toContain('font-family:sans-serif');
+  });
+
   it('parseAgentResponse throws on invalid rule set', () => {
     expect(() => parseAgentResponse('{"version":1,"ops":[{"op":"nuke"}],"globalCss":""}')).toThrow();
   });
